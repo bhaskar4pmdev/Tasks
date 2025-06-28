@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bhaskar's Task Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary-color: #2c3e50;
+      --accent-color: #1abc9c;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+    }
+    header {
+      background: var(--primary-color);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    nav {
+      background: #34495e;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    nav button {
+      background: none;
+      border: none;
+      color: white;
+      padding: 14px 20px;
+      cursor: pointer;
+      font-size: 16px;
+      flex: 1 1 auto;
+    }
+    nav button.active {
+      background: var(--accent-color);
+    }
+    .tab {
+      display: none;
+      padding: 15px;
+    }
+    .active-tab {
+      display: block;
+    }
+    .project {
+      background: white;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      min-width: 600px;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .chart-container {
+      background: white;
+      margin: 10px auto;
+      padding: 10px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      width: 95%;
+    }
+    .add-project-form, .add-task-form {
+      margin: 10px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .add-project-form input, .add-task-form input, .add-task-form select {
+      flex: 1 1 auto;
+      padding: 8px;
+      font-size: 14px;
+    }
+    .add-project-form button, .add-task-form button {
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    @media (max-width: 600px) {
+      nav button {
+        font-size: 14px;
+        padding: 10px;
+      }
+      header h1 {
+        font-size: 20px;
+      }
+      header p {
+        font-size: 14px;
+      }
+      .add-task-form, .add-project-form {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .project table {
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Bhaskar's Project Task Tracker</h1>
+    <p>Track every detail and measure your progress</p>
+  </header>
+
+  <nav>
+    <button class="tablink active" onclick="showTab('dashboard')">📊 Dashboard</button>
+    <button class="tablink" onclick="showTab('projects')">🗂 Projects</button>
+    <button class="tablink" onclick="showTab('due')">⏰ Due Tasks</button>
+    <button class="tablink" onclick="showTab('summary')">🌱 Life Progress</button>
+    <button class="tablink" onclick="showTab('add')">➕ Add Task</button>
+  </nav>
+
+  <div id="dashboard" class="tab active-tab"><div class="chart-container"><canvas id="projectChart"></canvas></div></div>
+  <div id="projects" class="tab">
+    <div class="add-project-form">
+      <input type="text" id="newProjectName" placeholder="New Project Name" />
+      <button onclick="addProject()">➕ Add Project</button>
+    </div>
+    <div id="projectContainer"></div>
+  </div>
+  <div id="due" class="tab"><div id="dueTasks"></div></div>
+  <div id="summary" class="tab"><div class="chart-container"><canvas id="summaryChart"></canvas></div></div>
+  <div id="add" class="tab">
+    <div class="add-task-form">
+      <input type="text" id="taskName" placeholder="Task Name" />
+      <select id="taskNature">
+        <option value="quick">Quick Task</option>
+        <option value="normal">Standard Task</option>
+        <option value="deep">Deep Work</option>
+      </select>
+      <button onclick="autoAssignTask()">➕ Create Task</button>
+    </div>
+    <p>Task will be assigned to a project and scheduled automatically based on task nature.</p>
+  </div>
+
+  <script>
+    const data = {
+      "PMP Studies": [],
+      "Holistic Cashflow Dashboard": [],
+      "Intercom-Salesforce Sync": [],
+      "Practice Penetration": [],
+      "AusNet Flows": [],
+      "Routine & Wellness": []
+    };
+
+    const projectMapping = { quick: "Routine & Wellness", normal: "Practice Penetration", deep: "PMP Studies" };
+    const timeEstimates = { quick: 30, normal: 90, deep: 180 };
+    const tabLinks = document.querySelectorAll(".tablink");
+    const tabs = document.querySelectorAll(".tab");
+
+    function showTab(id) {
+      tabs.forEach(tab => tab.classList.remove("active-tab"));
+      document.getElementById(id).classList.add("active-tab");
+      tabLinks.forEach(btn => btn.classList.remove("active"));
+      event.target.classList.add("active");
+      if (id === "dashboard") drawProjectChart();
+      if (id === "summary") drawSummaryChart();
+    }
+
+    function renderProjects() {
+      const container = document.getElementById("projectContainer");
+      container.innerHTML = "";
+      for (const [project, tasks] of Object.entries(data)) {
+        const div = document.createElement("div");
+        div.className = "project";
+        const title = document.createElement("h2");
+        title.textContent = project;
+        div.appendChild(title);
+        const table = document.createElement("table");
+        table.innerHTML = `<thead><tr><th>Task</th><th>Start</th><th>End</th><th>Due</th><th>Time Spent</th><th>Done</th><th>Delete</th></tr></thead><tbody></tbody>`;
+        const tbody = table.querySelector("tbody");
+        tasks.forEach((task, i) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `<td><input value="${task.name}"/></td><td><input type="date" value="${task.start}"/></td><td><input type="date" value="${task.end}"/></td><td><input type="date" value="${task.due}"/></td><td><input type="number" value="${task.time}" style="width:60px"/> mins</td><td><input type="checkbox" ${task.done ? "checked" : ""} onchange="toggleDone('${project}', ${i})"/></td><td><button onclick="deleteTask('${project}', ${i})">🗑</button></td>`;
+          tbody.appendChild(row);
+        });
+        const addRow = document.createElement("tr");
+        addRow.innerHTML = `<td colspan="7"><button onclick="addTask('${project}')">➕ Add Task</button></td>`;
+        tbody.appendChild(addRow);
+        div.appendChild(table);
+        container.appendChild(div);
+      }
+    }
+
+    function addTask(project) {
+      data[project].push({ name: "", start: "", end: "", due: "", time: 0, done: false });
+      renderProjects();
+    }
+
+    function deleteTask(project, index) {
+      data[project].splice(index, 1);
+      renderProjects();
+    }
+
+    function toggleDone(project, index) {
+      data[project][index].done = !data[project][index].done;
+      renderProjects();
+    }
+
+    function addProject() {
+      const name = document.getElementById("newProjectName").value.trim();
+      if (name && !data[name]) {
+        data[name] = [];
+        document.getElementById("newProjectName").value = "";
+        renderProjects();
+      }
+    }
+
+    function autoAssignTask() {
+      const name = document.getElementById("taskName").value.trim();
+      const nature = document.getElementById("taskNature").value;
+      const project = projectMapping[nature];
+      const time = timeEstimates[nature];
+      const today = new Date();
+      const start = today.toISOString().split("T")[0];
+      const end = new Date(today.getTime() + time * 60000);
+      const due = new Date(today.getTime() + 2 * 86400000);
+      const endFormatted = end.toISOString().split("T")[0];
+      const dueFormatted = due.toISOString().split("T")[0];
+      if (name && project) {
+        data[project].push({ name, start, end: endFormatted, due: dueFormatted, time, done: false });
+        document.getElementById("taskName").value = "";
+        renderProjects();
+        alert(`Task added to ${project}`);
+      }
+    }
+
+    function drawProjectChart() {
+      const ctx = document.getElementById("projectChart").getContext("2d");
+      const labels = Object.keys(data);
+      const values = labels.map(p => data[p].length ? data[p].filter(t => t.done).length / data[p].length * 100 : 0);
+      new Chart(ctx, {
+        type: "bar",
+        data: { labels, datasets: [{ label: '% Tasks Completed', data: values, backgroundColor: 'rgba(52, 152, 219, 0.7)' }] },
+        options: { scales: { y: { beginAtZero: true, max: 100 } } }
+      });
+    }
+
+    function drawSummaryChart() {
+      const ctx = document.getElementById("summaryChart").getContext("2d");
+      const allTasks = Object.values(data).flat();
+      const done = allTasks.filter(t => t.done).length;
+      const pending = allTasks.length - done;
+      new Chart(ctx, {
+        type: "pie",
+        data: {
+          labels: ["Done", "Pending"],
+          datasets: [{ data: [done, pending], backgroundColor: ["#2ecc71", "#e74c3c"] }]
+        }
+      });
+    }
+
+    function renderDueTasks() {
+      const container = document.getElementById("dueTasks");
+      container.innerHTML = "";
+      const today = new Date().toISOString().split("T")[0];
+      for (const [project, tasks] of Object.entries(data)) {
+        const due = tasks.filter(t => t.due && !t.done && t.due <= today);
+        if (due.length) {
+          const div = document.createElement("div");
+          div.className = "project";
+          div.innerHTML = `<h2>${project}</h2><ul>${due.map(t => `<li>${t.name} (Due: ${t.due})</li>`).join("")}</ul>`;
+          container.appendChild(div);
+        }
+      }
+    }
+
+    renderProjects();
+    renderDueTasks();
+    setInterval(renderDueTasks, 60000);
+  </script>
+</body>
+</html>
